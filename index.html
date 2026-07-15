@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>いいね営業リスト</title>
+<style>
+body{font-family:"Yu Gothic UI",Meiryo,sans-serif;margin:0;background:#f5f5f4;color:#1c1917}
+#gate{max-width:340px;margin:16vh auto 0;padding:24px;background:#fff;border:1px solid #e7e5e4;border-radius:12px;text-align:center}
+#gate h1{font-size:15px;margin:0 0 4px}
+#gate p{font-size:11px;color:#78716c;margin:0 0 14px}
+#pw{width:100%;box-sizing:border-box;padding:10px;font-size:16px;border:1px solid #d6d3d1;border-radius:8px;margin-bottom:10px}
+#unlock{width:100%;padding:10px;font-size:14px;background:#0f766e;color:#fff;border:none;border-radius:8px;cursor:pointer}
+#gerr{font-size:12px;color:#b91c1c;min-height:1.2em;margin-top:8px}
+.hidden{display:none}
+</style>
+<style id="payload-css"></style>
+</head>
+<body>
+<div id="gate">
+  <h1>いいね営業リスト</h1>
+  <p>共有されたパスワードを入力してください（この端末に記憶されます）</p>
+  <input id="pw" type="password" placeholder="パスワード" autocomplete="current-password">
+  <button id="unlock">解錠</button>
+  <div id="gerr"></div>
+</div>
+<div id="content" class="hidden"></div>
+<script>
+// ---- 復号（publish_viewer.py と対: PBKDF2-SHA256(600k)/AES-256-GCM/gzip・skeb-listing/刀剣と同一スキーム）----
+const ITER = 600000;
+function b64(s){ return Uint8Array.from(atob(s), c => c.charCodeAt(0)); }
+async function decryptPayload(enc, password){
+  const salt = b64(enc.salt), iv = b64(enc.iv), ct = b64(enc.ciphertext);
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey(
+    {name:"PBKDF2", salt, iterations: enc.iterations || ITER, hash:"SHA-256"},
+    base, {name:"AES-GCM", length:256}, false, ["decrypt"]);
+  const gz = new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM", iv}, key, ct));
+  const ds = new DecompressionStream("gzip");
+  const buf = await new Response(new Blob([gz]).stream().pipeThrough(ds)).arrayBuffer();
+  return JSON.parse(new TextDecoder().decode(buf));
+}
+
+// ---- チェックリスト（payload内の<script>はinnerHTMLでは実行されないため、ビューア側で束ねる。lib.ps1のテンプレと対）----
+function upd(){document.querySelectorAll('section').forEach(function(s){var t=s.querySelectorAll('.chk').length,d=s.querySelectorAll('.chk:checked').length;var c=s.querySelector('.cnt');if(c){c.textContent=d+'/'+t}})}
+function bindChecklist(){
+  document.querySelectorAll('.chk').forEach(function(c){
+    var k='xlo:'+c.getAttribute('data-k');
+    if(localStorage.getItem(k)==='1'){c.checked=true;c.closest('.row').classList.add('done')}
+    c.addEventListener('change',function(){localStorage.setItem(k,c.checked?'1':'0');c.closest('.row').classList.toggle('done',c.checked);upd()});
+  });
+  upd();
+}
+
+async function loadAndRender(pw){
+  const enc = await (await fetch("./data.json", {cache:"no-store"})).json();
+  const data = await decryptPayload(enc, pw);
+  document.getElementById("payload-css").textContent = data.css || "";
+  const c = document.getElementById("content");
+  c.innerHTML = data.body || "";
+  bindChecklist();
+  document.getElementById("gate").classList.add("hidden");
+  c.classList.remove("hidden");
+  document.title = "いいね営業リスト " + (data.date || "");
+}
+
+// ---- gate（skeb-listing と同パターン: 成功時に端末保存→次回自動解錠。復号失敗時のみ保存値を破棄）----
+let UNLOCK_BUSY = false;
+async function tryUnlock(pw){
+  if(UNLOCK_BUSY || !pw) return;
+  UNLOCK_BUSY = true;
+  const err = document.getElementById("gerr");
+  err.textContent = "解錠中…";
+  try{
+    await loadAndRender(pw);
+    localStorage.setItem("xlo_pw", pw);
+  }catch(e){
+    if (e && (e.name === "OperationError" || e instanceof DOMException)) {
+      localStorage.removeItem("xlo_pw");
+      err.textContent = "解錠失敗（パスワードを確認）";
+    } else {
+      err.textContent = "データ取得に失敗（ネットワーク接続を確認して再試行）";
+    }
+  }finally{
+    UNLOCK_BUSY = false;
+  }
+}
+document.getElementById("unlock").addEventListener("click", () => tryUnlock(document.getElementById("pw").value));
+document.getElementById("pw").addEventListener("keydown", e => { if(e.key==="Enter") tryUnlock(e.target.value); });
+window.addEventListener("DOMContentLoaded", () => {
+  const saved = localStorage.getItem("xlo_pw");
+  if (saved) tryUnlock(saved);
+});
+</script>
+</body>
+</html>
