@@ -46,7 +46,7 @@ async function decryptPayload(enc, password){
 function upd(){document.querySelectorAll('section').forEach(function(s){var t=s.querySelectorAll('.chk').length,d=s.querySelectorAll('.chk:checked').length;var c=s.querySelector('.cnt');if(c){c.textContent=d+'/'+t}})}
 function remain(){var n=document.querySelectorAll('.chk:not(:checked)').length;var e=document.getElementById('remain');if(e){e.textContent=n?('残り '+n+' 件'):'完了 🎉'}}
 function rowLink(row){var b=row.querySelector('.btn:not(.alt)');if(b&&b.getAttribute('href')){return b.getAttribute('href')}var h=row.querySelector('a.handle');return h?h.getAttribute('href'):null}
-function openNext(){var chk=document.querySelector('.chk:not(:checked)');if(!chk){remain();return}var row=chk.closest('.row');var url=rowLink(row);if(url){window.open(url,'_blank','noopener')}chk.checked=true;localStorage.setItem('xlo:'+chk.getAttribute('data-k'),'1');row.classList.add('done');row.scrollIntoView({block:'center',behavior:'smooth'});upd();remain()}
+function openNext(){var chk=document.querySelector('.chk:not(:checked)');if(!chk){remain();return}var row=chk.closest('.row');var url=rowLink(row);if(url){window.open(url,'_blank','noopener')}chk.checked=true;localStorage.setItem('xlo:'+chk.getAttribute('data-k'),'1');row.classList.add('done');upd();remain()}
 function bindChecklist(){
   document.querySelectorAll('.chk').forEach(function(c){
     var k='xlo:'+c.getAttribute('data-k');
